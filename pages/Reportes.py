@@ -5,6 +5,11 @@ from datetime import datetime
 from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter, FieldOperator
 
+# === VERIFICACIÓN DE SEGURIDAD ===
+if 'is_authenticated' not in st.session_state or not st.session_state.is_authenticated:
+    st.warning("🔒 Debes iniciar sesión para acceder a esta página. Vuelve a la página principal.")
+    st.stop()
+# ==================================
 st.set_page_config(page_title="Reporte Diario de Contabilidad", page_icon="📈")
 st.title("📈 Reporte Diario de Contabilidad")
 
