@@ -20,18 +20,27 @@ if not firebase_admin._apps:
     try:
         cred_source = st.secrets["firebase"]
         cred_dict = dict(cred_source)
-        # Limpieza de la private_key (SOLUCIÓN AL ERROR DE FORMATO)
+        
+        # 1. LIMPIEZA DE LA PRIVATE KEY (CRÍTICO)
         if "private_key" in cred_dict:
             cred_dict["private_key"] = cred_dict["private_key"].replace('\\n', '\n')
             
         cred = credentials.Certificate(cred_dict)
-        firebase_admin.initialize_app(cred)
-        # st.success("Conexión a Firebase activa.") # Comentamos esto para el login
+
+        # 2. INICIALIZACIÓN CON OPCIONES EXPLICITAS (SOLUCIÓN DEL ERROR 404)
+        # Asegúrate de que el project_id sea el correcto: streamlit-1320265
+        firebase_admin.initialize_app(cred, {
+            'projectId': 'streamlit-1320265', 
+            'databaseURL': 'https://streamlit-1320265.firebaseio.com' 
+        })
+        
+        # st.success("Conexión a Firebase activa.") 
     except Exception as e:
         st.error(f"Error CRÍTICO de Conexión a Firebase: {e}")
         st.stop()
         
-db = firestore.client()
+# A partir de aquí, se puede inicializar el cliente de Firestore
+db = firestore.client() 
 employees_ref = db.collection('employees')
 
 # Inicializa el estado de la sesión
