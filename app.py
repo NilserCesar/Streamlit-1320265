@@ -6,7 +6,7 @@ import hashlib
 from datetime import datetime
 
 # =================================================================
-# === CONFIGURACIÓN DE PÁGINA Y ESTADO DE SESIÓN ==================
+# === 1. CONFIGURACIÓN DE PÁGINA Y ESTADO DE SESIÓN ==================
 # =================================================================
 
 st.set_page_config(page_title="Gestión de Grifo", page_icon="⛽", layout="centered")
@@ -20,11 +20,31 @@ if 'user_uid' not in st.session_state:
     st.session_state.user_uid = None
 
 
+# --- FUNCIÓN PARA OCULTAR EL MENÚ LATERAL ANTES DEL LOGIN ---
+def hide_sidebar_if_not_logged_in():
+    """Oculta la barra lateral si el usuario no ha iniciado sesión."""
+    if not st.session_state.is_authenticated:
+        st.markdown(
+            """
+            <style>
+                /* Oculta el contenedor principal de la barra lateral */
+                [data-testid="stSidebar"] {
+                    visibility: hidden;
+                }
+                /* Opcional: Oculta el botón expandir/colapsar si está visible */
+                [data-testid="stSidebarToggleButton"] {
+                    visibility: hidden;
+                }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
 # =================================================================
-# === 1. CONEXIÓN A FIREBASE Y UTILIDADES =========================
+# === 2. CONEXIÓN A FIREBASE Y LÓGICA DE HASH =======================
 # =================================================================
 
-# Función para hashear la contraseña (misma función que en Configuraciones)
+# Función para hashear la contraseña
 def hash_password(password):
     """Genera un hash SHA-256 de la contraseña."""
     return hashlib.sha256(password.encode()).hexdigest()
@@ -32,7 +52,6 @@ def hash_password(password):
 # Inicialización segura de Firebase
 if not firebase_admin._apps:
     try:
-        # Asegúrate de que tu archivo secrets.toml tenga la sección [firebase] con tus credenciales
         cred_source = st.secrets["firebase"]
         cred_dict = dict(cred_source)
         
@@ -42,8 +61,8 @@ if not firebase_admin._apps:
             
         cred = credentials.Certificate(cred_dict)
 
-        # SOLUCIÓN AL ERROR 404: Inicializar con el projectId explícito
-        PROJECT_ID = "streamlit-1320265" # <<< Reemplaza con tu ID de Proyecto si es diferente
+        # Configuración Explícita para evitar Error 404 de base de datos no encontrada
+        PROJECT_ID = "streamlit-1320265" # <<< ¡REEMPLAZA CON TU ID DE PROYECTO REAL!
         
         firebase_admin.initialize_app(cred, {
             'projectId': PROJECT_ID, 
@@ -54,13 +73,12 @@ if not firebase_admin._apps:
         st.error(f"Error CRÍTICO de Conexión a Firebase. Revisa secrets.toml y el ID del proyecto. Error: {e}")
         st.stop()
         
-# Inicializa el cliente de Firestore
 db = firestore.client()
 employees_ref = db.collection('employees')
 
 
 # =================================================================
-# === 2. LÓGICA DE AUTENTICACIÓN ==================================
+# === 3. FUNCIÓN DE AUTENTICACIÓN ===================================
 # =================================================================
 
 def authenticate_user(dni, password):
@@ -69,18 +87,12 @@ def authenticate_user(dni, password):
         doc = employees_ref.document(dni).get()
         if doc.exists:
             user_data = doc.to_dict()
-            
-            # 1. Verificar que el empleado esté activo
-            if user_data.get('is_active') is not True:
-                return False, "❌ Cuenta Inactiva. Contacta al administrador."
-                
-            # 2. Obtener el hash almacenado
             stored_hash = user_data.get('password_hash')
-            if not stored_hash:
-                return False, "❌ Cuenta sin contraseña asignada. Contacta al administrador."
-                
-            # 3. Comparar HASH
+            
             if hash_password(password) == stored_hash:
+                if user_data.get('is_active') is not True:
+                    return False, "❌ Cuenta Inactiva. Contacta al administrador."
+
                 st.session_state.is_authenticated = True
                 st.session_state.user_role = user_data.get('role')
                 st.session_state.user_uid = dni
@@ -91,7 +103,6 @@ def authenticate_user(dni, password):
             return False, "❌ Usuario (DNI) no encontrado."
             
     except Exception as e:
-        # Este error debería ser menos común ahora que corregimos el 404
         return False, f"Ocurrió un error inesperado al autenticar: {e}"
 
 def logout():
@@ -103,32 +114,32 @@ def logout():
 
 
 # =================================================================
-# === 3. INTERFAZ DE USUARIO (DASHBOARD o LOGIN) ==================
+# === 4. INTERFAZ DE USUARIO Y REDIRECCIÓN ==========================
 # =================================================================
 
 if st.session_state.is_authenticated:
-    # --- VISTA POST-LOGIN (Dashboard Principal) ---
+    # --- VISTA POST-LOGIN: REDIRECCIÓN ---
     
-    # 1. Bloqueo de No-Administradores (EXTRA SEGURO)
+    # 1. Bloqueo de No-Administradores
     if st.session_state.user_role != "Administrador":
         st.error("🚫 Acceso denegado. Este sistema es solo para Administradores.")
         logout()
         st.stop()
     
-    # 2. Dashboard de Bienvenida
-    st.title("⛽ Dashboard Principal del Grifo")
-    st.info(f"Sesión activa como: **{st.session_state.user_role}** (UID: {st.session_state.user_uid})")
+    # 2. REDIRECCIÓN INMEDIATA a la página de Reportes
+    try:
+        # Esto navega directamente a la página deseada
+        st.switch_page("pages/1_Reportes.py") 
+    except Exception as e:
+        # En caso de que el archivo no exista o haya otro error de navegación
+        st.error(f"Error al intentar cargar la página de Reportes. Verifica que 'pages/1_Reportes.py' exista. Error: {e}")
+        st.stop()
     
-    # Puedes mostrar aquí un resumen rápido del día usando firestore.client()
-    st.header("📈 Resumen Rápido del Día")
-    st.metric("Total de Ventas Teóricas Hoy", value="S/. 0.00", delta="0.00")
-    st.write("*(Para ver los datos detallados, usa la página **Reportes** del menú lateral.)*")
-    
-    st.markdown("---")
-    st.button("Cerrar Sesión", on_click=logout)
-
 else:
-    # --- VISTA PRE-LOGIN (Formulario) ---
+    # --- VISTA PRE-LOGIN: LOGIN Y OCULTAR MENÚ ---
+    
+    # Ocultar el menú lateral (sidebar)
+    hide_sidebar_if_not_logged_in() 
     
     st.title("🔐 Acceso al Sistema de Gestión de Grifo")
     st.subheader("Ingresa tus credenciales")
@@ -143,6 +154,6 @@ else:
             success, message = authenticate_user(username, password)
             if success:
                 st.success(message)
-                st.rerun() # Recarga la página para activar la navegación lateral
+                st.rerun() # Recarga para activar la redirección
             else:
                 st.error(message)
