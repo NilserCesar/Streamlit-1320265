@@ -6,12 +6,31 @@ import hashlib
 from datetime import datetime
 
 # =================================================================
-# === 1. CONFIGURACIÓN DE PÁGINA Y ESTADO DE SESIÓN ==================
+# === 1. CONFIGURACIÓN DE PÁGINA Y OCULTAMIENTO DE MENÚ (CRÍTICO) ===
 # =================================================================
 
+# 1. Configuración de la página
 st.set_page_config(page_title="Gestión de Grifo", page_icon="⛽", layout="centered")
 
-# Inicializa el estado de la sesión
+# 2. CSS para OCULTAR el menú lateral por defecto (Elimina el parpadeo/flash)
+# Esto se inyecta y aplica ANTES de que el resto del código se ejecute.
+st.markdown(
+    """
+    <style>
+        /* Oculta el contenedor principal de la barra lateral */
+        [data-testid="stSidebar"] {
+            visibility: hidden;
+        }
+        /* Oculta el botón expandir/colapsar */
+        [data-testid="stSidebarToggleButton"] {
+            visibility: hidden;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# 3. Inicializa el estado de la sesión
 if 'is_authenticated' not in st.session_state:
     st.session_state.is_authenticated = False
 if 'user_role' not in st.session_state:
@@ -19,26 +38,6 @@ if 'user_role' not in st.session_state:
 if 'user_uid' not in st.session_state:
     st.session_state.user_uid = None
 
-
-# --- FUNCIÓN PARA OCULTAR EL MENÚ LATERAL ANTES DEL LOGIN ---
-def hide_sidebar_if_not_logged_in():
-    """Oculta la barra lateral si el usuario no ha iniciado sesión."""
-    if not st.session_state.is_authenticated:
-        st.markdown(
-            """
-            <style>
-                /* Oculta el contenedor principal de la barra lateral */
-                [data-testid="stSidebar"] {
-                    visibility: hidden;
-                }
-                /* Opcional: Oculta el botón expandir/colapsar si está visible */
-                [data-testid="stSidebarToggleButton"] {
-                    visibility: hidden;
-                }
-            </style>
-            """,
-            unsafe_allow_html=True,
-        )
 
 # =================================================================
 # === 2. CONEXIÓN A FIREBASE Y LÓGICA DE HASH =======================
@@ -61,7 +60,7 @@ if not firebase_admin._apps:
             
         cred = credentials.Certificate(cred_dict)
 
-        # Configuración Explícita para evitar Error 404 de base de datos no encontrada
+        # Configuración Explícita para evitar Error 404
         PROJECT_ID = "streamlit-1320265" # <<< ¡REEMPLAZA CON TU ID DE PROYECTO REAL!
         
         firebase_admin.initialize_app(cred, {
@@ -114,7 +113,7 @@ def logout():
 
 
 # =================================================================
-# === 4. INTERFAZ DE USUARIO Y REDIRECCIÓN ==========================
+# === 4. LÓGICA CENTRAL DE REDIRECCIÓN Y LOGIN ======================
 # =================================================================
 
 if st.session_state.is_authenticated:
@@ -126,20 +125,17 @@ if st.session_state.is_authenticated:
         logout()
         st.stop()
     
-    # 2. REDIRECCIÓN INMEDIATA a la página de Reportes
+    # 2. REDIRECCIÓN INMEDIATA
+    # Al redireccionar, el menú lateral (sidebar) se volverá VISIBLE 
+    # automáticamente en la página de Reportes.
     try:
-        # Esto navega directamente a la página deseada
         st.switch_page("pages/1_Reportes.py") 
     except Exception as e:
-        # En caso de que el archivo no exista o haya otro error de navegación
         st.error(f"Error al intentar cargar la página de Reportes. Verifica que 'pages/1_Reportes.py' exista. Error: {e}")
         st.stop()
     
 else:
-    # --- VISTA PRE-LOGIN: LOGIN Y OCULTAR MENÚ ---
-    
-    # Ocultar el menú lateral (sidebar)
-    hide_sidebar_if_not_logged_in() 
+    # --- VISTA PRE-LOGIN: SOLO FORMULARIO ---
     
     st.title("🔐 Acceso al Sistema de Gestión de Grifo")
     st.subheader("Ingresa tus credenciales")
