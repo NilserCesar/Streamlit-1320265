@@ -4,6 +4,11 @@ from firebase_admin import firestore
 from datetime import datetime
 import hashlib
 
+# === VERIFICACIÓN DE SEGURIDAD ===
+if 'is_authenticated' not in st.session_state or not st.session_state.is_authenticated:
+    st.warning("🔒 Debes iniciar sesión para acceder a esta página. Vuelve a la página principal.")
+    st.stop()
+# ==================================
 st.set_page_config(page_title="Configuraciones del Sistema", page_icon="⚙️")
 st.title("⚙️ Configuraciones de Administración")
 
