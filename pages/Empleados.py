@@ -5,7 +5,11 @@ from datetime import datetime
 from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter, FieldOperator
 # Puedes usar 'hashlib' si quieres hashear contraseñas aquí, pero lo dejaremos simple por ahora.
-
+# === VERIFICACIÓN DE SEGURIDAD ===
+if 'is_authenticated' not in st.session_state or not st.session_state.is_authenticated:
+    st.warning("🔒 Debes iniciar sesión para acceder a esta página. Vuelve a la página principal.")
+    st.stop()
+# ==================================
 st.set_page_config(page_title="Gestión de Empleados", page_icon="👥")
 st.title("👥 Gestión de Personal y Salarios")
 
