@@ -6,46 +6,50 @@ import hashlib
 from datetime import datetime
 
 # =================================================================
-# === 1. CONFIGURACIÓN DE PÁGINA Y OCULTAMIENTO DE MENÚ (CRÍTICO) ===
+# === 1. CONFIGURACIÓN DE PÁGINA Y OCULTAMIENTO DE SIDEBAR ========
 # =================================================================
 
-# 1. Configuración de la página
-st.set_page_config(page_title="Gestión de Grifo", page_icon="⛽", layout="centered")
-
-# 2. CSS para OCULTAR el menú lateral por defecto (Elimina el parpadeo/flash)
-# Esto se inyecta y aplica ANTES de que el resto del código se ejecute.
-st.markdown(
-    """
-    <style>
-        /* Oculta el contenedor principal de la barra lateral */
-        [data-testid="stSidebar"] {
-            visibility: hidden;
-        }
-        /* Oculta el botón expandir/colapsar */
-        [data-testid="stSidebarToggleButton"] {
-            visibility: hidden;
-        }
-    </style>
-    """,
-    unsafe_allow_html=True,
+st.set_page_config(
+    page_title="Gestión de Grifo",
+    page_icon="⛽",
+    layout="centered"
 )
 
-# 3. Inicializa el estado de la sesión
-if 'is_authenticated' not in st.session_state:
-    st.session_state.is_authenticated = False
-if 'user_role' not in st.session_state:
-    st.session_state.user_role = None
-if 'user_uid' not in st.session_state:
-    st.session_state.user_uid = None
+# CSS para ocultar sidebar *sin dejar espacio, sin botón y sin flash*
+st.markdown("""
+    <style>
+        /* Oculta por completo la barra lateral */
+        section[data-testid="stSidebar"] {
+            display: none !important;
+        }
 
+        /* Oculta el botón de plegar sidebar */
+        button[data-testid="stSidebarToggle"] {
+            display: none !important;
+        }
+
+        /* Fuerza que el contenido principal ocupe todo el ancho */
+        div[data-testid="stAppViewContainer"] {
+            margin-left: 0 !important;
+            padding-left: 0 !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# Inicializar session_state
+for key, value in {
+    "is_authenticated": False,
+    "user_role": None,
+    "user_uid": None
+}.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
 
 # =================================================================
-# === 2. CONEXIÓN A FIREBASE Y LÓGICA DE HASH =======================
+# === 2. FIREBASE & HASH ===========================================
 # =================================================================
 
-# Función para hashear la contraseña
 def hash_password(password):
-    """Genera un hash SHA-256 de la contraseña."""
     return hashlib.sha256(password.encode()).hexdigest()
 
 # Inicialización segura de Firebase
@@ -53,103 +57,93 @@ if not firebase_admin._apps:
     try:
         cred_source = st.secrets["firebase"]
         cred_dict = dict(cred_source)
-        
-        # Solución CRÍTICA para el formato de la private_key en Streamlit Secrets
+
         if "private_key" in cred_dict:
-            cred_dict["private_key"] = cred_dict["private_key"].replace('\\n', '\n')
-            
+            cred_dict["private_key"] = cred_dict["private_key"].replace("\\n", "\n")
+
         cred = credentials.Certificate(cred_dict)
 
-        # Configuración Explícita para evitar Error 404
-        PROJECT_ID = "streamlit-1320265" # <<< ¡REEMPLAZA CON TU ID DE PROYECTO REAL!
-        
-        firebase_admin.initialize_app(cred, {
-            'projectId': PROJECT_ID, 
-            'databaseURL': f'https://{PROJECT_ID}.firebaseio.com' 
-        })
-        
-    except Exception as e:
-        st.error(f"Error CRÍTICO de Conexión a Firebase. Revisa secrets.toml y el ID del proyecto. Error: {e}")
-        st.stop()
-        
-db = firestore.client()
-employees_ref = db.collection('employees')
+        PROJECT_ID = "streamlit-1320265"  # ← Ajusta tu ID real aquí
 
+        firebase_admin.initialize_app(cred, {
+            "projectId": PROJECT_ID,
+            "databaseURL": f"https://{PROJECT_ID}.firebaseio.com"
+        })
+
+    except Exception as e:
+        st.error(f"Error al conectar Firebase: {e}")
+        st.stop()
+
+db = firestore.client()
+employees_ref = db.collection("employees")
 
 # =================================================================
-# === 3. FUNCIÓN DE AUTENTICACIÓN ===================================
+# === 3. AUTENTICACIÓN =============================================
 # =================================================================
 
 def authenticate_user(dni, password):
-    """Verifica credenciales contra Firestore."""
     try:
         doc = employees_ref.document(dni).get()
-        if doc.exists:
-            user_data = doc.to_dict()
-            stored_hash = user_data.get('password_hash')
-            
-            if hash_password(password) == stored_hash:
-                if user_data.get('is_active') is not True:
-                    return False, "❌ Cuenta Inactiva. Contacta al administrador."
 
-                st.session_state.is_authenticated = True
-                st.session_state.user_role = user_data.get('role')
-                st.session_state.user_uid = dni
-                return True, f"¡Bienvenido, {user_data.get('name')}!"
-            else:
-                return False, "❌ Contraseña incorrecta."
-        else:
-            return False, "❌ Usuario (DNI) no encontrado."
-            
+        if not doc.exists:
+            return False, "❌ Usuario no encontrado."
+
+        user = doc.to_dict()
+
+        if hash_password(password) != user.get("password_hash"):
+            return False, "❌ Contraseña incorrecta."
+
+        if not user.get("is_active", False):
+            return False, "❌ Cuenta inactiva. Contacte al administrador."
+
+        st.session_state.is_authenticated = True
+        st.session_state.user_role = user.get("role")
+        st.session_state.user_uid = dni
+
+        return True, f"Bienvenido, {user.get('name')}"
+
     except Exception as e:
-        return False, f"Ocurrió un error inesperado al autenticar: {e}"
+        return False, f"Error inesperado: {e}"
 
 def logout():
-    """Cierra la sesión y limpia el estado."""
     st.session_state.is_authenticated = False
     st.session_state.user_role = None
     st.session_state.user_uid = None
     st.rerun()
 
-
 # =================================================================
-# === 4. LÓGICA CENTRAL DE REDIRECCIÓN Y LOGIN ======================
+# === 4. LOGIN / REDIRECCIÓN =======================================
 # =================================================================
 
 if st.session_state.is_authenticated:
-    # --- VISTA POST-LOGIN: REDIRECCIÓN ---
-    
-    # 1. Bloqueo de No-Administradores
+
+    # Proteger acceso
     if st.session_state.user_role != "Administrador":
-        st.error("🚫 Acceso denegado. Este sistema es solo para Administradores.")
+        st.error("🚫 Acceso denegado. Solo Administradores.")
         logout()
         st.stop()
-    
-    # 2. REDIRECCIÓN INMEDIATA
-    # Al redireccionar, el menú lateral (sidebar) se volverá VISIBLE 
-    # automáticamente en la página de Reportes.
+
+    # Redirigir a Reportes
     try:
-        st.switch_page("pages/1_Reportes.py") 
+        st.switch_page("pages/1_Reportes.py")
     except Exception as e:
-        st.error(f"Error al intentar cargar la página de Reportes. Verifica que 'pages/1_Reportes.py' exista. Error: {e}")
-        st.stop()
-    
+        st.error(f"Error cargando Reportes: {e}")
 else:
-    # --- VISTA PRE-LOGIN: SOLO FORMULARIO ---
-    
+
     st.title("🔐 Acceso al Sistema de Gestión de Grifo")
     st.subheader("Ingresa tus credenciales")
-    
+
     with st.form("login_form"):
-        username = st.text_input("Usuario (DNI)", key="login_user")
-        password = st.text_input("Contraseña", type="password", key="login_pw")
-        
-        login_button = st.form_submit_button("Iniciar Sesión")
-        
-        if login_button:
-            success, message = authenticate_user(username, password)
-            if success:
-                st.success(message)
-                st.rerun() # Recarga para activar la redirección
+        dni = st.text_input("Usuario (DNI)")
+        password = st.text_input("Contraseña", type="password")
+
+        btn = st.form_submit_button("Iniciar Sesión")
+
+        if btn:
+            ok, msg = authenticate_user(dni, password)
+            if ok:
+                st.success(msg)
+                st.rerun()
             else:
-                st.error(message)
+                st.error(msg)
+
