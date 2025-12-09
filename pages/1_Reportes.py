@@ -5,9 +5,16 @@ from datetime import datetime
 from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter, FieldOperator
 
+ROL_PERMITIDO = "Administrador"
 # === VERIFICACIÓN DE SEGURIDAD ===
 if 'is_authenticated' not in st.session_state or not st.session_state.is_authenticated:
+    # Bloquea si no ha iniciado sesión
     st.warning("🔒 Debes iniciar sesión para acceder a esta página. Vuelve a la página principal.")
+    st.stop()
+    
+if st.session_state.user_role != ROL_PERMITIDO:
+    # Bloquea si el rol no es el correcto (ej: si un "Despachador" intenta acceder)
+    st.error(f"🚫 Acceso denegado. Tu rol de '{st.session_state.user_role}' no tiene permiso para ver los reportes.")
     st.stop()
 # ==================================
 st.set_page_config(page_title="Reporte Diario de Contabilidad", page_icon="📈")
