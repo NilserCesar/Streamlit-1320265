@@ -1,112 +1,110 @@
 import streamlit as st
 import pandas as pd
 import random
-from datetime import datetime
+from datetime import datetime, date, timedelta
 
-# =================================================================
-# === 1. CONFIGURACIÓN DE PÁGINA (BLOQUEO DE SIDEBAR) =============
-# =================================================================
-st.set_page_config(page_title="Modo Simulación - SENATI", layout="wide")
+# --- CONFIGURACIÓN Y ESTILO ---
+st.set_page_config(page_title="Reporte Histórico V&T", layout="wide")
 
 st.markdown("""
     <style>
-        [data-testid="stSidebar"], [data-testid="stSidebarNav"], button[data-testid="stSidebarToggle"] {
-            display: none !important;
-        }
+        [data-testid="stSidebar"], [data-testid="stSidebarNav"], button[data-testid="stSidebarToggle"] { display: none !important; }
         [data-testid="stAppViewContainer"] { margin-left: 0px !important; }
-        .firma-autor { text-align: center; color: #1E3A8A; font-size: 16px; font-weight: bold; padding: 10px; border: 2px dashed #1E3A8A; border-radius: 10px; margin-bottom: 20px; }
-        .stNumberInput input { font-family: 'Courier New', monospace; font-size: 1.5rem !important; font-weight: bold; text-align: center; }
+        .main-title { color: #003366; font-size: 30px; font-weight: bold; text-align: center; }
+        .stMetric { background-color: #f0f2f6; padding: 15px; border-radius: 10px; border: 1px solid #d1d5db; }
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="firma-autor">🛠️ MODO SIMULACIÓN DE ENTREGA FINAL<br>Hecho Nilser Cesar Tuero Mayta - Senati</div>', unsafe_allow_html=True)
+st.markdown(f'<div style="text-align: center; color: gray;">Hecho Nilser Cesar Tuero Mayta - Senati</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="main-title">📈 AUDITORÍA DE VENTAS: OCT - DIC 2025</div>', unsafe_allow_html=True)
 
-# =================================================================
-# === 2. GENERACIÓN DE DATOS FAKE (SIN CONEXIÓN) ==================
-# =================================================================
-
-# Precios aleatorios simulados
-PRECIOS_FAKE = {"90": 15.40, "95": 16.80, "DL": 17.20}
-
-# Generar 22 dispensadores con lecturas iniciales aleatorias
-if 'dispensadores' not in st.session_state:
-    data = []
-    for i in range(1, 23):
-        prod = random.choice(["90", "95", "DL"])
-        lectura_ini = random.randint(100000, 500000)
-        data.append({
-            "pump_id": f"LADO-{i:02d}",
-            "product_id": prod,
-            "initial_reading": lectura_ini,
-            "final_reading": lectura_ini # Empezamos con final = inicial
+# --- GENERACIÓN DE DATOS HISTÓRICOS (FAKERS) ---
+@st.cache_data
+def generar_historial():
+    fecha_inicio = date(2025, 10, 1)
+    fecha_fin = date(2025, 12, 30)
+    delta = (fecha_fin - fecha_inicio).days
+    
+    registros_diarios = []
+    detalles_contometros = []
+    
+    for i in range(delta + 1):
+        actual = fecha_inicio + timedelta(days=i)
+        # Venta total del día entre 5k y 20k
+        venta_dia = random.uniform(5000, 20000)
+        gastos = venta_dia * random.uniform(0.05, 0.1) # 5-10% gastos
+        vales = venta_dia * random.uniform(0.02, 0.08)  # 2-8% vales
+        
+        registros_diarios.append({
+            "Fecha": actual,
+            "Venta Bruta": venta_dia,
+            "Gastos": gastos,
+            "Vales": vales,
+            "Saldo Neto": venta_dia - gastos - vales
         })
-    st.session_state.dispensadores = data
-
-# =================================================================
-# === 3. INTERFAZ DE USUARIO (PRUEBA) =============================
-# =================================================================
-
-st.title("⛽ Simulador de Control de Contómetros")
-st.info("Esta versión utiliza datos aleatorios para demostrar la lógica del sistema sin requerir conexión a Firebase.")
-
-tab1, tab2 = st.tabs(["📝 Registro de Lecturas", "📊 Reporte Generado"])
-
-with tab1:
-    st.subheader("Ingreso de Lecturas Finales")
-    
-    # Creamos un formulario simulado
-    total_venta_simulada = 0
-    
-    col1, col2, col3, col4 = st.columns([1, 1, 2, 1])
-    col1.write("**Bomba**")
-    col2.write("**Prod.**")
-    col3.write("**Lectura Final (9D)**")
-    col4.write("**Galones**")
-    st.divider()
-
-    for i, pump in enumerate(st.session_state.dispensadores):
-        c1, c2, c3, c4 = st.columns([1, 1, 2, 1])
-        c1.info(f"**{pump['pump_id']}**")
-        c2.write(pump['product_id'])
         
-        # Input de lectura final
-        nuevo_final = c3.number_input(
-            label=f"L_{i}",
-            value=int(pump['final_reading']),
-            min_value=int(pump['initial_reading']),
-            step=1,
-            key=f"input_fake_{i}",
-            label_visibility="collapsed"
-        )
-        st.session_state.dispensadores[i]['final_reading'] = nuevo_final
-        
-        galones = nuevo_final - pump['initial_reading']
-        total_venta_simulada += (galones * PRECIOS_FAKE[pump['product_id']])
-        
-        if galones > 0:
-            c4.success(f"{galones:,.2f}")
-        else:
-            c4.write("0.00")
+        # Simular los 22 contómetros para ese día específico
+        for c in range(1, 23):
+            detalles_contometros.append({
+                "Fecha": actual,
+                "Bomba": f"B-{c:02d}",
+                "Producto": random.choice(["90", "95", "DL"]),
+                "Venta (S/)": venta_dia / 22 # Reparto equitativo aprox.
+            })
+            
+    return pd.DataFrame(registros_diarios), pd.DataFrame(detalles_contometros)
 
-with tab2:
-    st.subheader("Resultado de la Liquidación (Simulado)")
-    
-    # Simular Gastos y Vales aleatorios
-    gasto_f = 150.00
-    vale_f = 85.50
-    saldo_f = total_venta_simulada - gasto_f - vale_f
-    
-    res1, res2, res3 = st.columns(3)
-    res1.metric("Venta Bruta Total", f"S/ {total_venta_simulada:,.2f}")
-    res2.metric("Egresos (Gastos + Vales)", f"S/ {gasto_f + vale_f:,.2f}", delta_color="inverse")
-    res3.metric("Saldo Neto a Depositar", f"S/ {saldo_f:,.2f}")
-    
-    st.divider()
-    if st.button("💾 SIMULAR ENVÍO A NUBE"):
-        st.balloons()
-        st.success("SIMULACIÓN EXITOSA: Los datos fueron procesados localmente. En la versión real, estos datos se sincronizan con Firebase y GitHub.")
+df_resumen, df_detalles = generar_historial()
 
-# Botón para regresar al login real
+# --- FILTROS DE FECHA ---
+st.sidebar.header("Filtros")
+col_f1, col_f2 = st.columns(2)
+with col_f1:
+    f_inicio = st.date_input("Fecha Inicio", date(2025, 10, 1), min_value=date(2025, 10, 1), max_value=date(2025, 12, 30))
+with col_f2:
+    f_fin = st.date_input("Fecha Fin", date(2025, 12, 30), min_value=date(2025, 10, 1), max_value=date(2025, 12, 30))
+
+# Filtrar DataFrames
+mask = (df_resumen['Fecha'] >= f_inicio) & (df_resumen['Fecha'] <= f_fin)
+df_filtrado = df_resumen.loc[mask]
+
+mask_det = (df_detalles['Fecha'] >= f_inicio) & (df_detalles['Fecha'] <= f_fin)
+df_det_filtrado = df_detalles.loc[mask_det)
+
+# --- PANEL DE MÉTRICAS TOTALES ---
 st.divider()
-if st.button("⬅️ VOLVER AL ACCESO REAL"):
-    st.switch_page("app.py")
+t_venta = df_filtrado['Venta Bruta'].sum()
+t_gastos = df_filtrado['Gastos'].sum()
+t_vales = df_filtrado['Vales'].sum()
+t_neto = df_filtrado['Saldo Neto'].sum()
+
+m1, m2, m3, m4 = st.columns(4)
+m1.metric("Venta Bruta Total", f"S/ {t_venta:,.2f}")
+m2.metric("Total Gastos", f"S/ {t_gastos:,.2f}")
+m3.metric("Total Vales", f"S/ {t_vales:,.2f}")
+m4.metric("Saldo Líquido", f"S/ {t_neto:,.2f}")
+
+# --- GRÁFICO DE TENDENCIA ---
+st.subheader("📊 Tendencia de Ventas Diarias")
+st.line_chart(df_filtrado.set_index('Fecha')['Venta Bruta'])
+
+
+
+# --- TABLAS DE DETALLES ---
+col_t1, col_t2 = st.columns([2, 3])
+
+with col_t1:
+    st.subheader("📅 Resumen por Día")
+    st.dataframe(df_filtrado.sort_values('Fecha', ascending=False), hide_index=True)
+
+with col_t2:
+    st.subheader("⛽ Detalle por Contómetro (22)")
+    # Selector de fecha específica para ver los 22
+    fecha_sel = st.selectbox("Ver detalle de contómetros para:", df_filtrado['Fecha'])
+    df_dia_22 = df_det_filtrado[df_det_filtrado['Fecha'] == fecha_sel]
+    st.table(df_dia_22[['Bomba', 'Producto', 'Venta (S/)']])
+
+# --- BOTÓN DE SALIDA ---
+st.divider()
+if st.button("⬅️ Volver al Panel de Prueba"):
+    st.switch_page("pages/PRUEBA_DE_LA_APP.py")
