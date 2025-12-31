@@ -3,108 +3,99 @@ import pandas as pd
 import random
 from datetime import datetime, date, timedelta
 
-# --- CONFIGURACIÓN Y ESTILO ---
+# --- 1. CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Reporte Histórico V&T", layout="wide")
 
+# CSS para mantener la interfaz limpia sin menús laterales
 st.markdown("""
     <style>
         [data-testid="stSidebar"], [data-testid="stSidebarNav"], button[data-testid="stSidebarToggle"] { display: none !important; }
         [data-testid="stAppViewContainer"] { margin-left: 0px !important; }
-        .main-title { color: #003366; font-size: 30px; font-weight: bold; text-align: center; }
-        .stMetric { background-color: #f0f2f6; padding: 15px; border-radius: 10px; border: 1px solid #d1d5db; }
+        .main-title { color: #003366; font-size: 28px; font-weight: bold; text-align: center; }
+        .stMetric { background-color: #f8f9fa; border: 1px solid #e0e0e0; padding: 10px; border-radius: 8px; }
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown(f'<div style="text-align: center; color: gray;">Hecho Nilser Cesar Tuero Mayta - Senati</div>', unsafe_allow_html=True)
-st.markdown(f'<div class="main-title">📈 AUDITORÍA DE VENTAS: OCT - DIC 2025</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align: center; color: gray;">Hecho Nilser Cesar Tuero Mayta - Senati</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">📈 AUDITORÍA CONTABLE: HISTORIAL DE VENTAS</div>', unsafe_allow_html=True)
 
-# --- GENERACIÓN DE DATOS HISTÓRICOS (FAKERS) ---
+# --- 2. GENERADOR DE DATOS FAKE (OCTUBRE - DICIEMBRE) ---
 @st.cache_data
-def generar_historial():
+def generar_data_historica():
     fecha_inicio = date(2025, 10, 1)
     fecha_fin = date(2025, 12, 30)
     delta = (fecha_fin - fecha_inicio).days
     
-    registros_diarios = []
-    detalles_contometros = []
+    lista_resumen = []
+    lista_bombas = []
     
     for i in range(delta + 1):
         actual = fecha_inicio + timedelta(days=i)
-        # Venta total del día entre 5k y 20k
-        venta_dia = random.uniform(5000, 20000)
-        gastos = venta_dia * random.uniform(0.05, 0.1) # 5-10% gastos
-        vales = venta_dia * random.uniform(0.02, 0.08)  # 2-8% vales
+        # Generar venta diaria entre 5,000 y 20,000
+        v_bruta = random.uniform(5000, 20000)
+        gastos = v_bruta * random.uniform(0.02, 0.05)
+        vales = v_bruta * random.uniform(0.01, 0.04)
         
-        registros_diarios.append({
+        lista_resumen.append({
             "Fecha": actual,
-            "Venta Bruta": venta_dia,
-            "Gastos": gastos,
-            "Vales": vales,
-            "Saldo Neto": venta_dia - gastos - vales
+            "Venta Bruta": round(v_bruta, 2),
+            "Gastos": round(gastos, 2),
+            "Vales": round(vales, 2),
+            "Saldo Neto": round(v_bruta - gastos - vales, 2)
         })
         
-        # Simular los 22 contómetros para ese día específico
-        for c in range(1, 23):
-            detalles_contometros.append({
+        # Simular detalle de los 22 contómetros para ese día
+        for b in range(1, 23):
+            lista_bombas.append({
                 "Fecha": actual,
-                "Bomba": f"B-{c:02d}",
-                "Producto": random.choice(["90", "95", "DL"]),
-                "Venta (S/)": venta_dia / 22 # Reparto equitativo aprox.
+                "Bomba": f"LADO-{b:02d}",
+                "Producto": random.choice(["90 Oct", "95 Oct", "Diesel"]),
+                "Venta Soles": round(v_bruta / 22, 2)
             })
             
-    return pd.DataFrame(registros_diarios), pd.DataFrame(detalles_contometros)
+    return pd.DataFrame(lista_resumen), pd.DataFrame(lista_bombas)
 
-df_resumen, df_detalles = generar_historial()
+df_diario, df_bombas = generar_data_historica()
 
-# --- FILTROS DE FECHA ---
-st.sidebar.header("Filtros")
-col_f1, col_f2 = st.columns(2)
-with col_f1:
-    f_inicio = st.date_input("Fecha Inicio", date(2025, 10, 1), min_value=date(2025, 10, 1), max_value=date(2025, 12, 30))
-with col_f2:
-    f_fin = st.date_input("Fecha Fin", date(2025, 12, 30), min_value=date(2025, 10, 1), max_value=date(2025, 12, 30))
+# --- 3. FILTROS DE RANGO DE FECHAS ---
+st.write("### 🔍 Filtros de Auditoría")
+c1, c2 = st.columns(2)
+with c1:
+    f_inicio = st.date_input("Desde:", date(2025, 10, 1), min_value=date(2025, 10, 1), max_value=date(2025, 12, 30))
+with c2:
+    f_fin = st.date_input("Hasta:", date(2025, 12, 30), min_value=date(2025, 10, 1), max_value=date(2025, 12, 30))
 
-# Filtrar DataFrames
-mask = (df_resumen['Fecha'] >= f_inicio) & (df_resumen['Fecha'] <= f_fin)
-df_filtrado = df_resumen.loc[mask]
+# Filtrado de datos
+df_filtrado = df_diario[(df_diario['Fecha'] >= f_inicio) & (df_diario['Fecha'] <= f_fin)]
 
-mask_det = (df_detalles['Fecha'] >= f_inicio) & (df_detalles['Fecha'] <= f_fin)
-df_det_filtrado = df_detalles.loc[mask_det)
-
-# --- PANEL DE MÉTRICAS TOTALES ---
+# --- 4. PANEL DE MÉTRICAS ACUMULADAS ---
 st.divider()
-t_venta = df_filtrado['Venta Bruta'].sum()
-t_gastos = df_filtrado['Gastos'].sum()
-t_vales = df_filtrado['Vales'].sum()
-t_neto = df_filtrado['Saldo Neto'].sum()
+total_v = df_filtrado['Venta Bruta'].sum()
+total_g = df_filtrado['Gastos'].sum()
+total_s = df_filtrado['Saldo Neto'].sum()
 
-m1, m2, m3, m4 = st.columns(4)
-m1.metric("Venta Bruta Total", f"S/ {t_venta:,.2f}")
-m2.metric("Total Gastos", f"S/ {t_gastos:,.2f}")
-m3.metric("Total Vales", f"S/ {t_vales:,.2f}")
-m4.metric("Saldo Líquido", f"S/ {t_neto:,.2f}")
+m1, m2, m3 = st.columns(3)
+m1.metric("Venta Bruta Acumulada", f"S/ {total_v:,.2f}")
+m2.metric("Total Egresos (Gastos/Vales)", f"S/ {(total_v - total_s):,.2f}", delta_color="inverse")
+m3.metric("Saldo Neto en Caja", f"S/ {total_s:,.2f}")
 
-# --- GRÁFICO DE TENDENCIA ---
-st.subheader("📊 Tendencia de Ventas Diarias")
+# --- 5. GRÁFICO DE DESEMPEÑO ---
+st.subheader("📊 Comportamiento de Ventas Diarias")
 st.line_chart(df_filtrado.set_index('Fecha')['Venta Bruta'])
 
 
+# --- 6. LISTADO DETALLADO ---
+t1, t2 = st.tabs(["📅 Resumen por Día", "⛽ Detalle por Dispensador"])
 
-# --- TABLAS DE DETALLES ---
-col_t1, col_t2 = st.columns([2, 3])
+with t1:
+    st.dataframe(df_filtrado.sort_values(by="Fecha", ascending=False), use_container_width=True, hide_index=True)
 
-with col_t1:
-    st.subheader("📅 Resumen por Día")
-    st.dataframe(df_filtrado.sort_values('Fecha', ascending=False), hide_index=True)
+with t2:
+    fecha_sel = st.selectbox("Seleccione un día para ver los 22 contómetros:", df_filtrado['Fecha'])
+    df_detalle_dia = df_bombas[df_bombas['Fecha'] == fecha_sel]
+    st.table(df_detalle_dia[['Bomba', 'Producto', 'Venta Soles']])
 
-with col_t2:
-    st.subheader("⛽ Detalle por Contómetro (22)")
-    # Selector de fecha específica para ver los 22
-    fecha_sel = st.selectbox("Ver detalle de contómetros para:", df_filtrado['Fecha'])
-    df_dia_22 = df_det_filtrado[df_det_filtrado['Fecha'] == fecha_sel]
-    st.table(df_dia_22[['Bomba', 'Producto', 'Venta (S/)']])
-
-# --- BOTÓN DE SALIDA ---
+# --- 7. CIERRE ---
 st.divider()
 if st.button("⬅️ Volver al Panel de Prueba"):
     st.switch_page("pages/PRUEBA_DE_LA_APP.py")
