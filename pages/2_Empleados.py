@@ -1,178 +1,89 @@
-# pages/2_Empleados.py
 import streamlit as st
 import pandas as pd
-from datetime import datetime
-from firebase_admin import firestore
-from google.cloud.firestore_v1.base_query import FieldFilter, FieldOperator
-# Puedes usar 'hashlib' si quieres hashear contraseñas aquí, pero lo dejaremos simple por ahora.
-# === VERIFICACIÓN DE SEGURIDAD ===
-if 'is_authenticated' not in st.session_state or not st.session_state.is_authenticated:
-    st.warning("🔒 Debes iniciar sesión para acceder a esta página. Vuelve a la página principal.")
-    st.stop()
-# ==================================
-st.set_page_config(page_title="Gestión de Empleados", page_icon="👥")
-st.title("👥 Gestión de Personal y Salarios")
+from datetime import datetime, date
 
-# Inicializamos la conexión a Firestore
-try:
-    db = firestore.client()
-except Exception:
-    st.error("Error: Conexión a Firebase no inicializada.")
-    st.stop()
-    
-# Referencias a las colecciones principales
-employees_ref = db.collection('employees')
-payments_ref = db.collection('employee_payments') # Colección para el historial de pagos
+# --- CONFIGURACIÓN DE PÁGINA ---
+st.set_page_config(page_title="Gestión de Personal - V&T", layout="wide")
 
+st.markdown("""
+    <style>
+        [data-testid="stSidebar"], [data-testid="stSidebarNav"], button[data-testid="stSidebarToggle"] { display: none !important; }
+        [data-testid="stAppViewContainer"] { margin-left: 0px !important; }
+        .card { background-color: #f0f2f6; padding: 20px; border-radius: 10px; border-left: 5px solid #003366; }
+        .chef-card { background-color: #e3f2fd; padding: 20px; border-radius: 10px; border-left: 5px solid #1976d2; }
+    </style>
+""", unsafe_allow_html=True)
 
-# --- PESTAÑAS ---
-tab1, tab2 = st.tabs(["Lista de Empleados", "Salario y Historial de Pagos"])
+st.markdown('<div style="text-align: center; color: gray;">Hecho Nilser Cesar Tuero Mayta - Senati</div>', unsafe_allow_html=True)
+st.title("👥 Control de Personal y Roles de Turno")
 
+# --- 1. BASE DE DATOS DE EMPLEADOS ---
+empleados = [
+    {"nombre": "Juan", "cargo": "Jefe de Personal", "sueldo": 1900, "tipo": "Administrativo"},
+    {"nombre": "Jose", "cargo": "Jefe de Personal (Relevo)", "sueldo": 1900, "tipo": "Administrativo"},
+    {"nombre": "Veronica", "cargo": "Grifero", "sueldo": 1500, "tipo": "Operativo"},
+    {"nombre": "Guillermo", "cargo": "Grifero", "sueldo": 1500, "tipo": "Operativo"},
+    {"nombre": "Cesar", "cargo": "Grifero", "sueldo": 1500, "tipo": "Operativo"},
+    {"nombre": "Grimalda", "cargo": "Grifero", "sueldo": 1500, "tipo": "Operativo"},
+]
 
-# =================================================================
-# === PESTAÑA 1: LISTA DE EMPLEADOS (CRUD) =========================
-# =================================================================
+# --- 2. LÓGICA DE ROTACIÓN (JEFE DE PERSONAL) ---
+# Juan y Jose rotan cada 15 días
+dia_del_año = datetime.now().timetuple().tm_yday
+bloque_15 = (dia_del_año // 15) % 2
 
-with tab1:
-    st.header("Lista y Registro de Personal")
-    
-    # ------------------ 1. FORMULARIO DE REGISTRO ------------------
-    st.subheader("Registrar Nuevo Empleado")
-    with st.form("new_employee_form"):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            name = st.text_input("Nombre", key="emp_name")
-            dni = st.text_input("DNI (Usado como ID/Usuario)", key="emp_dni")
-            role = st.selectbox("Rol", options=["Despachador", "Supervisor", "Administrador", "Gerente"])
-            
-        with col2:
-            last_name = st.text_input("Apellido", key="emp_last_name")
-            phone = st.text_input("Teléfono", key="emp_phone")
-            hire_date = st.date_input("Fecha de Ingreso", datetime.now().date())
-            
-        submitted = st.form_submit_button("Guardar Empleado")
+jefe_activo = "Juan" if bloque_15 == 0 else "Jose"
+jefe_saliente = "Jose" if bloque_15 == 0 else "Juan"
 
-        if submitted and dni:
-            try:
-                # Comprobamos si el DNI ya existe
-                if employees_ref.document(dni).get().exists:
-                    st.warning("⚠️ Ya existe un empleado con ese DNI. No se guardó.")
-                else:
-                    employee_data = {
-                        "employee_uid": dni, # Usamos el DNI como ID del documento para facilitar la búsqueda
-                        "name": name,
-                        "last_name": last_name,
-                        "dni": dni,
-                        "phone": phone,
-                        "role": role,
-                        "hire_date": datetime.combine(hire_date, datetime.min.time()),
-                        "is_active": True,
-                        "created_at": firestore.SERVER_TIMESTAMP,
-                    }
-                    employees_ref.document(dni).set(employee_data)
-                    st.success(f"✅ Empleado {name} {last_name} registrado correctamente.")
-            except Exception as e:
-                st.error(f"❌ Error al registrar empleado: {e}")
+# --- 3. INTERFAZ VISUAL ---
 
-    # ------------------ 2. TABLA DE EMPLEADOS ------------------
-    st.subheader("Personal Activo")
-    
-    @st.cache_data(ttl=600)
-    def load_employees():
-        """Carga la lista de empleados activos."""
-        query = employees_ref.where('is_active', '==', True).stream()
-        data = [doc.to_dict() for doc in query]
-        
-        # Convertir timestamp a formato de fecha legible para Streamlit
-        for item in data:
-            if isinstance(item.get('hire_date'), datetime):
-                item['hire_date'] = item['hire_date'].strftime('%Y-%m-%d')
-        
-        return pd.DataFrame(data).sort_values(by='last_name')
+# Sección Jefatura
+st.subheader("🏠 Residencia y Jefatura (Rotación 15 días)")
+c1, c2 = st.columns(2)
 
-    df_employees = load_employees()
-    
-    if not df_employees.empty:
-        # Mostramos solo los campos relevantes en la tabla
-        st.dataframe(
-            df_employees[['name', 'last_name', 'dni', 'phone', 'role', 'hire_date']],
-            column_order=('name', 'last_name', 'dni', 'role', 'phone', 'hire_date'),
-            hide_index=True
-        )
-    else:
-        st.info("No hay empleados activos registrados.")
+with c1:
+    st.markdown(f"""
+    <div class="chef-card">
+        <h3>En Turno (Vive en Grifo): {jefe_activo}</h3>
+        <p><b>Cargo:</b> Jefe de Personal / Orden y Mantenimiento</p>
+        <p><b>Sueldo:</b> S/ 1,900.00</p>
+        <p><b>Estado:</b> Activo - Supervisando Personal</p>
+    </div>
+    """, unsafe_allow_html=True)
 
+with c2:
+    st.info(f"**Próximo Relevo:** {jefe_saliente} (Libre actualmente)")
+    st.write("La rotación se realiza automáticamente cada 15 días según el calendario del sistema.")
 
-# =================================================================
-# === PESTAÑA 2: SALARIO E HISTORIAL DE PAGOS ======================
-# =================================================================
+st.divider()
 
-with tab2:
-    st.header("Registro de Pagos al Personal")
-    
-    if 'df_employees' in locals() and not df_employees.empty:
-        
-        # 1. Selección de Empleado
-        employee_names = df_employees['name'] + ' ' + df_employees['last_name']
-        selected_employee = st.selectbox("Selecciona Empleado:", options=employee_names)
-        
-        # Obtenemos el DNI del empleado seleccionado para usarlo como UID
-        selected_uid = df_employees.loc[df_employees['name'] + ' ' + df_employees['last_name'] == selected_employee, 'dni'].iloc[0]
+# Sección Griferos
+st.subheader("⛽ Griferos Operativos (Turno 8h - Rotación Diaria)")
+st.write("Se mantienen **2 trabajadores por turno** con viáticos incluidos.")
 
-        
-        # 2. Formulario de Registro de Pago
-        st.subheader(f"Registrar Nuevo Pago para {selected_employee}")
-        with st.form("payment_form"):
-            col1, col2 = st.columns(2)
-            with col1:
-                payment_amount = st.number_input("Monto del Pago (S/.)", min_value=0.01, format="%.2f")
-            with col2:
-                payment_date = st.date_input("Fecha del Pago", datetime.now().date())
-            
-            payment_submitted = st.form_submit_button("Registrar Pago")
+# Mostrar tabla de sueldos y viáticos
+df_griferos = pd.DataFrame(empleados[2:]) # Solo los griferos
+df_griferos['Horas'] = 8
+df_griferos['Viáticos'] = "Incluido (Desayuno/Almuerzo/Cena)"
 
-            if payment_submitted:
-                try:
-                    payment_data = {
-                        "employee_uid": selected_uid,
-                        "payment_date": datetime.combine(payment_date, datetime.min.time()),
-                        "amount": float(payment_amount),
-                        "description": "Pago de Nómina",
-                        "registered_at": firestore.SERVER_TIMESTAMP,
-                    }
-                    payments_ref.add(payment_data) # El ID del documento se genera automáticamente
-                    st.success(f"✅ Pago de S/. {payment_amount:.2f} registrado para {selected_employee}.")
-                except Exception as e:
-                    st.error(f"❌ Error al registrar pago: {e}")
+st.table(df_griferos)
 
-        st.divider()
-        
-        # 3. Historial de Pagos
-        st.subheader("Historial de Pagos Efectuados")
-        
-        @st.cache_data(ttl=600)
-        def load_payments(uid):
-            """Carga el historial de pagos para un empleado específico."""
-            query = payments_ref.where('employee_uid', '==', uid).order_by('payment_date', direction=firestore.Query.DESCENDING).stream()
-            data = [doc.to_dict() for doc in query]
-            
-            for item in data:
-                if isinstance(item.get('payment_date'), datetime):
-                    item['payment_date'] = item['payment_date'].strftime('%Y-%m-%d')
-            
-            return pd.DataFrame(data)
+# Simulación de Turnos de Hoy
+st.info("📅 **Turnos del día de hoy:**")
+col_t1, col_t2 = st.columns(2)
 
-        df_payments = load_payments(selected_uid)
-        
-        if not df_payments.empty:
-            # Mostramos el historial en orden descendente
-            st.dataframe(
-                df_payments[['payment_date', 'amount', 'description', 'registered_at']],
-                column_order=('payment_date', 'amount', 'description', 'registered_at'),
-                hide_index=True
-            )
-        else:
-            st.info(f"No hay historial de pagos registrado para {selected_employee}.")
-    else:
-        st.warning("Debe registrar empleados en la pestaña anterior para ver el historial de pagos.")
+# Lógica simple de rotación para 2 personas por turno
+with col_t1:
+    st.success(f"**Turno Mañana/Tarde:**\n1. Veronica\n2. Guillermo")
+with col_t2:
+    st.success(f"**Turno Tarde/Noche:**\n1. Cesar\n2. Grimalda")
+
+# --- 4. RESUMEN DE PLANILLA ---
+st.divider()
+st.subheader("💰 Resumen de Planilla Mensual Estimada")
+total_planilla = sum([e['sueldo'] for e in empleados])
+st.metric("Inversión Total en Personal", f"S/ {total_planilla:,.2f}", "Incluye viáticos")
+
+# Botón de Navegación
+if st.button("⬅️ Volver al Panel de Prueba"):
+    st.switch_page("pages/PRUEBA_DE_LA_APP.py")
