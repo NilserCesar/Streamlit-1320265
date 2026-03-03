@@ -7,172 +7,161 @@ import pytz
 # --- 1. CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Sistema V&T", layout="wide")
 
-# --- 2. CSS DE REINICIO TOTAL (DISEÑO PLANO Y PEGADO) ---
+# --- 2. CSS DE MÁXIMA COMPACTACIÓN Y ALINEACIÓN ---
 st.markdown("""
     <style>
-    /* 1. ELIMINAR BOTONES +/- Y ELEMENTOS DE STREAMLIT */
+    /* ELIMINAR CONTENEDORES Y BORDES DEL INPUT */
     div[data-testid="stNumberInput"] button { display: none !important; }
-    
-    /* 2. LIMPIEZA RADICAL DEL INPUT (SIN CAJAS, SIN GRIS, SIN HUECOS) */
     div[data-testid="stNumberInput"] > div,
     div[data-testid="stNumberInput"] div[data-baseweb="input"],
     div[data-testid="stNumberInput"] div[data-baseweb="base-input"],
     input {
-        background-color: transparent !important; /* Quita fondo gris */
-        border: none !important;                 /* Quita bordes plomos */
-        padding: 0px !important;                 /* Quita espacios blancos */
-        margin: 0px !important;                  /* Quita márgenes */
-        min-height: auto !important;             /* Quita lo gordo */
-        height: 20px !important;                 /* Altura de texto */
-        box-shadow: none !important;             /* Quita sombras */
-        outline: none !important;                /* Quita borde azul al clicar */
+        background-color: transparent !important;
+        border: none !important;
+        padding: 0px !important;
+        margin: 0px !important;
+        min-height: auto !important;
+        height: 22px !important;
+        box-shadow: none !important;
+        outline: none !important;
         font-family: monospace !important;
         font-size: 1rem !important;
         text-align: left !important;
     }
 
-    /* 3. ALINEACIÓN QUIRÚRGICA DE LA FILA */
+    /* ALINEACIÓN DE COLUMNAS PARA QUE TODO ESTÉ EN UNA LÍNEA */
     [data-testid="column"] {
         display: flex !important;
-        align-items: center !important;         /* Pone todo en la misma línea recta */
-        height: 22px !important; 
-        padding: 0px 2px !important;
+        align-items: center !important;
+        height: 24px !important; 
+        padding: 0px 5px !important;
     }
 
-    /* Eliminar el aire entre filas */
     [data-testid="stVerticalBlock"] { gap: 0px !important; }
-    div.element-container { margin: 0px !important; padding: 0px !important; }
-
-    /* 4. TEXTO PLANO */
+    
+    /* ESTILO DE TEXTO */
     .txt-flat {
         font-size: 0.9rem;
         font-family: monospace;
         margin: 0px !important;
-        line-height: 22px !important;
+        line-height: 24px !important;
         white-space: nowrap;
     }
     .txt-prod { color: #cc0000; font-weight: bold; }
+    .txt-soles { color: #28a745; font-weight: bold; }
 
-    /* Encabezados de módulo planos */
+    /* CABECERA DE MÓDULOS */
     .mod-header {
-        border-bottom: 1px solid #ddd;
-        color: #666;
-        font-size: 0.7rem;
-        margin-top: 10px;
-        margin-bottom: 2px;
-        text-transform: uppercase;
+        border-bottom: 1px solid #000;
+        font-size: 0.75rem;
+        margin-top: 15px;
+        margin-bottom: 5px;
         font-weight: bold;
+        color: #555;
     }
-    
-    /* Pestañas más compactas */
-    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
-    .stTabs [data-baseweb="tab"] { height: 30px; padding: 0px 10px; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. CONFIGURACIÓN DE TIEMPO ---
+# --- 3. CONFIGURACIÓN DE PRECIOS Y TIEMPO ---
+PRECIOS = {"DL": 14.00, "90": 14.00, "95": 15.00}
 tz = pytz.timezone('America/Lima')
-ahora = datetime.now(tz)
-fecha_hoy = ahora.strftime("%d/%m/%Y")
+fecha_hoy = datetime.now(tz).strftime("%d/%m/%Y")
 
 # --- 4. INICIALIZACIÓN DE DATOS ---
 if 'form_data' not in st.session_state:
+    # Generar 22 mangueras de ejemplo
+    productos_lista = ["DL", "90", "95"]
     st.session_state.form_data = [
-        {"id": f"D-{i:02d}", "producto": random.choice(["90", "95", "DL"]),
-         "inicio": random.randint(100000, 500000)} for i in range(1, 23)
+        {"id": f"M-{i+1:02d}", "producto": productos_lista[i % 3],
+         "inicio": 100000 + (i * 100)} for i in range(22)
     ]
     for item in st.session_state.form_data:
         item["final"] = item["inicio"]
 
 if 'gastos' not in st.session_state: st.session_state.gastos = []
-if 'vales' not in st.session_state: st.session_state.vales = []
 
-PRECIOS = {"90": 14.0, "95": 15.0, "DL": 15.0}
+# --- 5. INTERFAZ PRINCIPAL ---
+st.title(f"⛽ V&T | {fecha_hoy}")
 
-# --- 5. ENCABEZADO ---
-st.markdown(f"**⛽ V&T | CONTROL DE VENTAS | {fecha_hoy}**")
+# --- WIDGETS DE PRECIOS ACTUALES ---
+c_p1, c_p2, c_p3 = st.columns(3)
+c_p1.metric("DL", f"S/ {PRECIOS['DL']:.2f}")
+c_p2.metric("90", f"S/ {PRECIOS['90']:.2f}")
+c_p3.metric("95", f"S/ {PRECIOS['95']:.2f}")
 
-# --- 6. PESTAÑAS ---
-tab1, tab2, tab3, tab4 = st.tabs(["🛒 VENTAS", "💸 GASTOS", "🎫 VALES", "💰 SALDO"])
+tab1, tab2, tab3 = st.tabs(["🛒 VENTAS", "💸 GASTOS", "💰 CIERRE"])
 
 with tab1:
-    venta_bruta_acumulada = 0
+    # Encabezados de tabla manuales para claridad
+    h1, h2, h3, h4, h5, h6 = st.columns([0.2, 0.3, 0.6, 0.6, 0.4, 0.5])
+    h1.caption("ID")
+    h2.caption("PROD")
+    h3.caption("LECT. INI")
+    h4.caption("LECT. FIN")
+    h5.caption("GL")
+    h6.caption("SOLES (S/) ")
 
-    def render_fila_recta(idx):
-        global venta_bruta_acumulada
-        item = st.session_state.form_data[idx]
+    total_soles_ventas = 0.0
+
+    def render_fila_operativa(idx):
+        global total_soles_ventas
+        it = st.session_state.form_data[idx]
+        precio_unit = PRECIOS[it["producto"]]
         
-        # Grid: ID | PROD | INICIO | INPUT (FINAL) | DIFERENCIA
-        c1, c2, c3, c4, c5 = st.columns([0.2, 0.3, 0.6, 0.6, 0.4])
+        # Grid: ID | PROD | INICIO | INPUT | GALONES | SOLES
+        cols = st.columns([0.2, 0.3, 0.6, 0.6, 0.4, 0.5])
         
-        with c1: st.markdown(f'<p class="txt-flat"><b>{item["id"]}</b></p>', unsafe_allow_html=True)
-        with c2: st.markdown(f'<p class="txt-flat txt-prod">{item["producto"]}</p>', unsafe_allow_html=True)
-        with c3: st.markdown(f'<p class="txt-flat" style="color:#666">{item["inicio"]:09d}</p>', unsafe_allow_html=True)
-        with c4:
-            # Input totalmente desnudo, pegado al texto
-            nuevo_final = st.number_input(
-                label=f"f_{idx}", 
-                value=int(item['final']), 
-                step=1, 
-                key=f"in_{idx}", 
-                label_visibility="collapsed"
+        cols[0].markdown(f'<p class="txt-flat"><b>{it["id"]}</b></p>', unsafe_allow_html=True)
+        cols[1].markdown(f'<p class="txt-flat txt-prod">{it["producto"]}</p>', unsafe_allow_html=True)
+        cols[2].markdown(f'<p class="txt-flat">{it["inicio"]:,.2f}</p>', unsafe_allow_html=True)
+        
+        with cols[3]:
+            # Input pegado al texto
+            nuevo_fin = st.number_input(
+                label=f"fin_{idx}", value=float(it['final']), 
+                step=0.01, key=f"k_{idx}", label_visibility="collapsed"
             )
         
-        item['final'] = nuevo_final
-        galones = item["final"] - item["inicio"]
-        subtotal = galones * PRECIOS[item["producto"]]
-        venta_bruta_acumulada += subtotal
+        st.session_state.form_data[idx]['final'] = nuevo_fin
+        galones = nuevo_fin - it["inicio"]
+        subtotal_soles = galones * precio_unit
+        total_soles_ventas += subtotal_soles
         
-        with c5:
-            if galones > 0:
-                st.markdown(f'<p class="txt-flat" style="color:blue; font-weight:bold;">+{galones:,.2f}</p>', unsafe_allow_html=True)
-            else:
-                st.markdown('<p class="txt-flat" style="color:#eee">0.00</p>', unsafe_allow_html=True)
+        cols[4].markdown(f'<p class="txt-flat" style="color:blue">{galones:,.2f}</p>', unsafe_allow_html=True)
+        cols[5].markdown(f'<p class="txt-flat txt-soles">S/ {subtotal_soles:,.2f}</p>', unsafe_allow_html=True)
 
-    # --- MÓDULOS ---
-    st.markdown('<div class="mod-header">Módulo 1</div>', unsafe_allow_html=True)
-    for i in range(0, 8): render_fila_recta(i)
+    # Renderizado de mangueras
+    st.markdown('<div class="mod-header">SURTIDORES</div>', unsafe_allow_html=True)
+    for i in range(len(st.session_state.form_data)):
+        render_fila_operativa(i)
 
-    st.markdown('<div class="mod-header">Módulo 2</div>', unsafe_allow_html=True)
-    for i in range(8, 16): render_fila_recta(i)
-
-    st.markdown('<div class="mod-header">Módulo 3</div>', unsafe_allow_html=True)
-    for i in range(16, 22): render_fila_recta(i)
-
-    st.divider()
-    st.markdown(f"### Venta Bruta Total: S/ {venta_bruta_acumulada:,.2f}")
+    # --- TOTALES AL FINAL DE LA COLUMNA DE SOLES ---
+    st.markdown("---")
+    tf1, tf2 = st.columns([2.1, 0.5])
+    tf1.markdown("<p style='text-align:right; font-weight:bold;'>TOTAL VENTAS BRUTAS:</p>", unsafe_allow_html=True)
+    tf2.markdown(f"<p class='txt-soles' style='font-size:1.2rem;'>S/ {total_soles_ventas:,.2f}</p>", unsafe_allow_html=True)
 
 with tab2:
-    st.markdown("**Registro de Gastos**")
-    with st.form("g", clear_on_submit=True):
-        c1, c2 = st.columns([3,1])
-        d = c1.text_input("Descripción")
-        m = c2.number_input("S/", min_value=0.0)
-        if st.form_submit_button("Añadir"):
-            if d: st.session_state.gastos.append({"D": d, "M": m}); st.rerun()
-    if st.session_state.gastos: st.table(st.session_state.gastos)
+    st.subheader("Gastos del Turno")
+    with st.form("gasto_form", clear_on_submit=True):
+        cg1, cg2 = st.columns([3,1])
+        desc = cg1.text_input("Concepto")
+        monto = cg2.number_input("Monto S/", min_value=0.0)
+        if st.form_submit_button("Registrar Gasto"):
+            if desc: 
+                st.session_state.gastos.append({"D": desc, "M": monto})
+                st.rerun()
+    if st.session_state.gastos:
+        st.table(st.session_state.gastos)
 
 with tab3:
-    st.markdown("**Registro de Vales**")
-    with st.form("v", clear_on_submit=True):
-        c1, c2 = st.columns([3,1])
-        cl = c1.text_input("Cliente/Placa")
-        v = c2.number_input("S/", min_value=0.0)
-        if st.form_submit_button("Añadir"):
-            if cl: st.session_state.vales.append({"C": cl, "M": v}); st.rerun()
-    if st.session_state.vales: st.table(st.session_state.vales)
-
-with tab4:
     total_g = sum(g["M"] for g in st.session_state.gastos)
-    total_v = sum(v["M"] for v in st.session_state.vales)
-    neto = venta_bruta_acumulada - total_g - total_v
+    neto_final = total_soles_ventas - total_g
     
     st.markdown(f"""
-        <div style="border:1px solid #000; padding:15px; background-color:#fff; text-align:center;">
-            <h2 style="margin:0;">TOTAL NETO A DEPOSITAR</h2>
-            <h1 style="color:green; margin:10px 0;">S/ {neto:,.2f}</h1>
-            <p style="font-size:0.8rem; color:#666;">
-                Venta: {venta_bruta_acumulada} | Gastos: -{total_g} | Vales: -{total_v}
-            </p>
+        <div style="border:2px solid #000; padding:20px; text-align:center;">
+            <h3>LIQUIDACIÓN FINAL</h3>
+            <h1 style="color:#28a745;">S/ {neto_final:,.2f}</h1>
+            <p>Ventas: S/ {total_soles_ventas:,.2f} | Gastos: S/ {total_g:,.2f}</p>
         </div>
     """, unsafe_allow_html=True)
