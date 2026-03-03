@@ -7,56 +7,58 @@ import pytz
 # --- 1. CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Sistema V&T", layout="wide")
 
-# --- 2. CSS AGRESIVO PARA COMPACTACIÓN CUADRÁTICA ---
+# --- 2. CSS AGRESIVO (SIN BOTONES +/- Y DISEÑO CUADRADO) ---
 st.markdown("""
     <style>
-    /* 1. Eliminar bordes redondeados en todo el sitio */
+    /* 1. ELIMINAR BOTONES +/- (Chrome, Safari, Edge, Firefox) */
+    input::-webkit-outer-spin-button, 
+    input::-webkit-inner-spin-button { 
+        -webkit-appearance: none !important; 
+        margin: 0 !important; 
+    }
+    input[type=number] { 
+        -moz-appearance: textfield !important; 
+    }
+
+    /* 2. DISEÑO CUADRÁTICO TOTAL */
     * { border-radius: 0px !important; }
 
-    /* 2. Eliminar botones +/- de los inputs numéricos */
-    input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { 
-        -webkit-appearance: none; margin: 0; 
-    }
-    input[type=number] { -moz-appearance: textfield; }
-
-    /* 3. Pegar líneas: reducir espacio vertical de widgets y columnas */
+    /* 3. COMPACTACIÓN DE FILAS Y COLUMNAS */
     [data-testid="stVerticalBlock"] > div { 
-        padding-top: 0rem !important; 
-        padding-bottom: 0rem !important; 
-        gap: 0px !important;
+        gap: 0px !important; 
+        padding-top: 0px !important; 
+        padding-bottom: 0px !important; 
     }
     [data-testid="column"] { 
-        padding: 1px 5px !important; 
+        padding: 0px 5px !important; 
     }
+    
+    /* 4. AJUSTE DE INPUTS (MÁS PEQUEÑOS Y PEGADOS) */
     .stNumberInput { 
-        margin-top: -10px !important; 
-        margin-bottom: -10px !important; 
+        margin-top: -12px !important; 
+    }
+    input { 
+        height: 30px !important; 
+        border: 1px solid #999 !important; 
+        background-color: #ffffff !important;
+        font-weight: bold !important;
     }
 
-    /* 4. Estilo de los inputs (Cuadrados y compactos) */
-    input {
-        background-color: #f8f9fa !important;
-        border: 1px solid #ced4da !important;
-        height: 28px !important;
-        font-family: monospace !important;
-        font-size: 1rem !important;
-    }
-
-    /* 5. Encabezados de módulo minimalistas */
+    /* 5. ENCABEZADOS DE MÓDULO */
     .mod-header {
-        background-color: #343a40;
+        background-color: #2c3e50;
         color: white;
-        padding: 2px 10px;
-        font-size: 0.9rem;
-        font-weight: bold;
-        margin-top: 10px;
+        padding: 3px 10px;
+        font-size: 0.85rem;
+        margin-top: 12px;
         margin-bottom: 2px;
+        text-transform: uppercase;
     }
 
-    /* 6. Etiquetas de texto */
-    .txt-small { font-size: 0.85rem; font-family: sans-serif; }
-    .txt-id { font-weight: bold; color: #1a1a1a; }
-    .txt-prod { font-weight: bold; color: #dc3545; }
+    /* 6. TEXTOS DE FILA */
+    .txt-row { font-size: 0.9rem; line-height: 1.8; }
+    .txt-id { font-weight: bold; color: #000; }
+    .txt-prod { font-weight: bold; color: #e74c3c; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -80,7 +82,7 @@ if 'vales' not in st.session_state: st.session_state.vales = []
 PRECIOS = {"90": 14.0, "95": 15.0, "DL": 15.0}
 
 # --- 5. ENCABEZADO ---
-st.markdown(f"### ⛽ V&T - REGISTRO DE VENTAS | {fecha_hoy}")
+st.markdown(f"### ⛽ V&T - CONTROL DE VENTAS | {fecha_hoy}")
 
 # --- 6. PESTAÑAS ---
 tab1, tab2, tab3, tab4 = st.tabs(["🛒 VENTAS", "💸 GASTOS", "🎫 VALES", "💰 SALDO"])
@@ -92,12 +94,12 @@ with tab1:
         global venta_bruta_acumulada
         item = st.session_state.form_data[idx]
         
-        # Columnas proporcionales para que todo entre en una línea
+        # Grid: ID | PROD | INICIO | INPUT | RESULTADO
         c1, c2, c3, c4, c5 = st.columns([0.4, 0.4, 1.2, 1.5, 1.2])
         
-        with c1: st.markdown(f'<span class="txt-small txt-id">{item["id"]}</span>', unsafe_allow_html=True)
-        with c2: st.markdown(f'<span class="txt-small txt-prod">{item["producto"]}</span>', unsafe_allow_html=True)
-        with c3: st.markdown(f'<span class="txt-small" style="color:#777">L: {item["inicio"]:09d}</span>', unsafe_allow_html=True)
+        with c1: st.markdown(f'<span class="txt-row txt-id">{item["id"]}</span>', unsafe_allow_html=True)
+        with c2: st.markdown(f'<span class="txt-row txt-prod">{item["producto"]}</span>', unsafe_allow_html=True)
+        with c3: st.markdown(f'<span class="txt-row" style="color:#666">[{item["inicio"]:09d}]</span>', unsafe_allow_html=True)
         with c4:
             nuevo_final = st.number_input(
                 label=f"f_{idx}", value=int(item['final']), 
@@ -112,41 +114,41 @@ with tab1:
         
         with c5:
             if galones > 0:
-                st.markdown(f'<span class="txt-small" style="color:#28a745">+{galones:,.2f} gl</span>', unsafe_allow_html=True)
+                st.markdown(f'<span class="txt-row" style="color:green; font-weight:bold;">+{galones:,.2f} gl</span>', unsafe_allow_html=True)
 
-    # --- BLOQUES DE FILAS ---
-    st.markdown('<div class="mod-header">MODULO 1 (01 - 08)</div>', unsafe_allow_html=True)
+    # --- RENDERIZADO POR MÓDULOS ---
+    st.markdown('<div class="mod-header">MÓDULO 1 (Disp. 01 al 08)</div>', unsafe_allow_html=True)
     for i in range(0, 8): render_fila_pistero(i)
 
-    st.markdown('<div class="mod-header">MODULO 2 (09 - 16)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="mod-header">MÓDULO 2 (Disp. 09 al 16)</div>', unsafe_allow_html=True)
     for i in range(8, 16): render_fila_pistero(i)
 
-    st.markdown('<div class="mod-header">MODULO 3 (17 - 22)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="mod-header">MÓDULO 3 (Disp. 17 al 22)</div>', unsafe_allow_html=True)
     for i in range(16, 22): render_fila_pistero(i)
 
     st.divider()
-    st.metric("VENTA TOTAL ACUMULADA", f"S/ {venta_bruta_acumulada:,.2f}")
+    st.subheader(f"Venta Bruta Total: S/ {venta_bruta_acumulada:,.2f}")
 
-# --- PESTAÑAS SECUNDARIAS ---
+# --- PESTAÑAS DE APOYO ---
 with tab2:
-    st.markdown('<div class="mod-header">GASTOS OPERATIVOS</div>', unsafe_allow_html=True)
+    st.markdown('<div class="mod-header">REGISTRO DE GASTOS</div>', unsafe_allow_html=True)
     with st.form("g", clear_on_submit=True):
         c1, c2 = st.columns([3,1])
         d = c1.text_input("Concepto")
-        m = c2.number_input("S/", min_value=0.0)
-        if st.form_submit_button("Añadir"):
+        m = c2.number_input("Monto S/", min_value=0.0)
+        if st.form_submit_button("Añadir Gasto"):
             if d: st.session_state.gastos.append({"Descripción": d, "Monto": m}); st.rerun()
-    st.table(pd.DataFrame(st.session_state.gastos)) if st.session_state.gastos else None
+    if st.session_state.gastos: st.table(pd.DataFrame(st.session_state.gastos))
 
 with tab3:
-    st.markdown('<div class="mod-header">VALES DE CRÉDITO</div>', unsafe_allow_html=True)
+    st.markdown('<div class="mod-header">REGISTRO DE VALES</div>', unsafe_allow_html=True)
     with st.form("v", clear_on_submit=True):
         c1, c2 = st.columns([3,1])
         cl = c1.text_input("Cliente/Placa")
-        v = c2.number_input("S/", min_value=0.0)
-        if st.form_submit_button("Añadir"):
+        v = c2.number_input("Monto S/", min_value=0.0)
+        if st.form_submit_button("Registrar Vale"):
             if cl: st.session_state.vales.append({"Cliente": cl, "Monto": v}); st.rerun()
-    st.table(pd.DataFrame(st.session_state.vales)) if st.session_state.vales else None
+    if st.session_state.vales: st.table(pd.DataFrame(st.session_state.vales))
 
 with tab4:
     total_g = sum(g["Monto"] for g in st.session_state.gastos)
@@ -154,14 +156,15 @@ with tab4:
     neto = venta_bruta_acumulada - total_g - total_v
     
     st.markdown(f"""
-        <div style="background-color:white; border:2px solid black; padding:15px;">
-            <h3 style="margin-top:0;">RESUMEN FINAL</h3>
-            Venta Bruta: S/ {venta_bruta_acumulada:,.2f}<br>
-            Gastos: S/ {total_g:,.2f}<br>
-            Vales: S/ {total_v:,.2f}<hr>
-            <h2 style="margin:0; color:green;">NETO A DEPOSITAR: S/ {neto:,.2f}</h2>
+        <div style="border:3px solid #000; padding:20px; background-color:#fff;">
+            <h2 style="margin-top:0;">CIERRE DE CAJA</h2>
+            <p>Venta Total: S/ {venta_bruta_acumulada:,.2f}</p>
+            <p style="color:red;">Gastos: - S/ {total_g:,.2f}</p>
+            <p style="color:orange;">Vales: - S/ {total_v:,.2f}</p>
+            <hr>
+            <h1 style="color:green; margin:0;">TOTAL A ENTREGAR: S/ {neto:,.2f}</h1>
         </div>
     """, unsafe_allow_html=True)
     
-    if st.button("FINALIZAR TURNO", use_container_width=True):
-        st.success("REGISTRO GUARDADO.")
+    if st.button("🚀 FINALIZAR TURNO Y GUARDAR", use_container_width=True):
+        st.success("DATOS GUARDADOS CORRECTAMENTE.")
