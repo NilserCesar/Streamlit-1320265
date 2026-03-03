@@ -6,7 +6,7 @@ import pytz
 # --- 1. CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Sistema V&T", layout="wide")
 
-# --- 2. CSS DE MÁXIMA COMPACTACIÓN Y ALINEACIÓN ---
+# --- 2. CSS DE MÁXIMA COMPACTACIÓN Y ESTILOS ESPECÍFICOS ---
 st.markdown("""
     <style>
     /* ELIMINAR CONTENEDORES Y BORDES DEL INPUT */
@@ -26,6 +26,12 @@ st.markdown("""
         font-family: monospace !important;
         font-size: 1rem !important;
         text-align: left !important;
+    }
+
+    /* COLOR VERDE PARA LA COLUMNA L. FINAL */
+    .input-verde input {
+        color: #1a7f37 !important; /* Verde simple */
+        font-weight: bold !important;
     }
 
     /* ALINEACIÓN DE COLUMNAS */
@@ -48,22 +54,23 @@ st.markdown("""
     .txt-prod { color: #cc0000; font-weight: bold; }
     .txt-soles { color: #28a745; font-weight: bold; }
 
-    /* CABECERA DE MÓDULOS */
+    /* CABECERA DE MÓDULOS CON MÁS ESPACIO */
     .mod-header {
         background-color: #f0f2f6;
         border-bottom: 2px solid #000;
-        padding: 2px 10px;
-        font-size: 0.8rem;
-        margin-top: 15px;
-        margin-bottom: 5px;
+        padding: 4px 10px;
+        font-size: 0.85rem;
+        margin-top: 25px; /* Más espacio arriba del módulo */
+        margin-bottom: 8px;
         font-weight: bold;
+        letter-spacing: 1px;
     }
     
     /* TOTAL POR MÓDULO */
     .mod-footer {
         border-top: 1px dashed #999;
-        margin-bottom: 10px;
-        padding-top: 2px;
+        margin-bottom: 15px;
+        padding-top: 4px;
         text-align: right;
         font-family: monospace;
         font-weight: bold;
@@ -77,31 +84,27 @@ tz = pytz.timezone('America/Lima')
 fecha_hoy = datetime.now(tz).strftime("%d/%m/%Y")
 
 if 'form_data' not in st.session_state:
-    # Definición de productos por manguera (puedes ajustar esto)
     prod_map = ["90", "95", "DL"]
     st.session_state.form_data = [
         {"id": f"M-{i+1:02d}", "producto": prod_map[i % 3], 
-         "inicio": 100000.0, "final": 100000.0} for i in range(22)
+         "inicio": 123456, "final": 123456} for i in range(22)
     ]
 
 if 'gastos' not in st.session_state: st.session_state.gastos = []
 
-# --- 4. TÍTULO Y WIDGETS DE PRECIO (CORREGIDO) ---
+# --- 4. TÍTULO Y PRECIOS ---
 st.subheader(f"⛽ V&T | REGISTRO DIARIO | {fecha_hoy}")
 
-# Widgets de precios en una sola fila separada
 c_p1, c_p2, c_p3 = st.columns(3)
 c_p1.metric("PRECIO DL", f"S/ {PRECIOS['DL']:.2f}")
 c_p2.metric("PRECIO 90", f"S/ {PRECIOS['90']:.2f}")
 c_p3.metric("PRECIO 95", f"S/ {PRECIOS['95']:.2f}")
 
-st.divider()
-
 # --- 5. LÓGICA DE RENDERIZADO ---
 def render_bloque(inicio_idx, fin_idx, nombre_modulo):
     st.markdown(f'<div class="mod-header">{nombre_modulo}</div>', unsafe_allow_html=True)
     
-    # Encabezados de columna
+    # Encabezados
     h = st.columns([0.2, 0.3, 0.6, 0.6, 0.4, 0.5])
     h[0].caption("ID")
     h[1].caption("PRODUCTO")
@@ -118,24 +121,31 @@ def render_bloque(inicio_idx, fin_idx, nombre_modulo):
         
         cols[0].markdown(f'<p class="txt-flat"><b>{it["id"]}</b></p>', unsafe_allow_html=True)
         cols[1].markdown(f'<p class="txt-flat txt-prod">{it["producto"]}</p>', unsafe_allow_html=True)
-        cols[2].markdown(f'<p class="txt-flat">{it["inicio"]:,.2f}</p>', unsafe_allow_html=True)
+        
+        # L. INICIO sin comas ni puntos (formato entero)
+        cols[2].markdown(f'<p class="txt-flat">{int(it["inicio"])}</p>', unsafe_allow_html=True)
         
         with cols[3]:
-            # Input totalmente limpio
+            # L. FINAL con clase CSS verde y formato entero (step=1)
+            st.markdown('<div class="input-verde">', unsafe_allow_html=True)
             n_fin = st.number_input(
-                label=f"f_{i}", value=float(it['final']), 
-                step=0.01, key=f"key_{i}", label_visibility="collapsed"
+                label=f"f_{i}", 
+                value=int(it['final']), 
+                step=1, # Solo números enteros
+                key=f"key_{i}", 
+                label_visibility="collapsed"
             )
+            st.markdown('</div>', unsafe_allow_html=True)
             st.session_state.form_data[i]['final'] = n_fin
         
         galones = n_fin - it["inicio"]
         subtotal = galones * PRECIOS[it["producto"]]
         total_modulo += subtotal
         
+        # Galones y Soles sí mantienen decimales por ser contables
         cols[4].markdown(f'<p class="txt-flat" style="color:blue">{galones:,.2f}</p>', unsafe_allow_html=True)
         cols[5].markdown(f'<p class="txt-flat txt-soles">S/ {subtotal:,.2f}</p>', unsafe_allow_html=True)
     
-    # Pie de módulo con total acumulado
     st.markdown(f'<div class="mod-footer">TOTAL {nombre_modulo}: S/ {total_modulo:,.2f}</div>', unsafe_allow_html=True)
     return total_modulo
 
@@ -162,11 +172,11 @@ with t2:
 
 with t3:
     total_g = sum(g["M"] for g in st.session_state.gastos)
-    neto = (m1 + m2 + m3) - total_g
+    neto = total_bruto - total_g
     st.markdown(f"""
         <div style="border:2px solid #000; padding:20px; text-align:center; background-color:#fff;">
             <h2>MONTO NETO A DEPOSITAR</h2>
             <h1 style="color:green;">S/ {neto:,.2f}</h1>
-            <p>Suma Módulos: S/ {m1+m2+m3:,.2f} | Gastos: S/ {total_g:,.2f}</p>
+            <p>Suma Módulos: S/ {total_bruto:,.2f} | Gastos: S/ {total_g:,.2f}</p>
         </div>
     """, unsafe_allow_html=True)
