@@ -1,12 +1,13 @@
 import streamlit as st
 import pandas as pd
+import random
 from datetime import datetime
 import pytz
 
 # --- 1. CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Sistema V&T", layout="wide")
 
-# --- 2. CSS DE MÁXIMA COMPACTACIÓN Y AJUSTES VISUALES ---
+# --- 2. CSS DE REINICIO Y ESTILOS (MEJORADO) ---
 st.markdown("""
     <style>
     /* ELIMINAR CONTENEDORES Y BORDES DEL INPUT */
@@ -34,7 +35,7 @@ st.markdown("""
         font-weight: bold !important;
     }
 
-    /* ALINEACIÓN DE COLUMNAS */
+    /* ALINEACIÓN DE COLUMNAS PARA QUE TODO ESTÉ EN UNA LÍNEA */
     [data-testid="column"] {
         display: flex !important;
         align-items: center !important;
@@ -60,10 +61,9 @@ st.markdown("""
         border-bottom: 2px solid #333;
         padding: 6px 12px;
         font-size: 0.85rem;
-        margin-top: 50px; /* Doble espacio para que no se pegue al anterior */
+        margin-top: 55px; /* Los 2 espacios extra que pediste */
         margin-bottom: 10px;
         font-weight: bold;
-        letter-spacing: 1.5px;
         color: #333;
     }
     
@@ -79,107 +79,120 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. CONFIGURACIÓN DE DATOS Y PRECIOS ---
-PRECIOS = {"DL": 14.00, "90": 14.00, "95": 15.00}
+# --- 3. CONFIGURACIÓN DE TIEMPO Y PRECIOS ---
 tz = pytz.timezone('America/Lima')
-fecha_hoy = datetime.now(tz).strftime("%d/%m/%Y")
+ahora = datetime.now(tz)
+fecha_hoy = ahora.strftime("%d/%m/%Y")
+PRECIOS = {"DL": 14.0, "90": 14.0, "95": 15.0}
 
+# --- 4. INICIALIZACIÓN DE DATOS (RESPETANDO TU LÓGICA) ---
 if 'form_data' not in st.session_state:
-    prod_map = ["90", "95", "DL"]
     st.session_state.form_data = [
-        {"id": f"M-{i+1:02d}", "producto": prod_map[i % 3], 
-         "inicio": 123456, "final": 123456} for i in range(22)
+        {"id": f"D-{i:02d}", "producto": random.choice(["90", "95", "DL"]),
+         "inicio": random.randint(100000, 500000)} for i in range(1, 23)
     ]
+    for item in st.session_state.form_data:
+        item["final"] = item["inicio"]
 
 if 'gastos' not in st.session_state: st.session_state.gastos = []
+if 'vales' not in st.session_state: st.session_state.vales = []
 
-# --- 4. TÍTULO Y WIDGETS DE PRECIO ---
-st.subheader(f"⛽ V&T | REGISTRO DE VENTAS | {fecha_hoy}")
+# --- 5. ENCABEZADO Y WIDGETS ---
+st.subheader(f"V&T | REGISTRO DE VENTAS | {fecha_hoy}")
 
-cp1, cp2, cp3 = st.columns(3)
-cp1.metric("PRECIO DL", f"S/ {PRECIOS['DL']:.2f}")
-cp2.metric("PRECIO 90", f"S/ {PRECIOS['90']:.2f}")
-cp3.metric("PRECIO 95", f"S/ {PRECIOS['95']:.2f}")
+# Widgets de precio arriba
+c_p1, c_p2, c_p3 = st.columns(3)
+c_p1.metric("PRECIO DL", f"S/ {PRECIOS['DL']:.2f}")
+c_p2.metric("PRECIO 90", f"S/ {PRECIOS['90']:.2f}")
+c_p3.metric("PRECIO 95", f"S/ {PRECIOS['95']:.2f}")
 
-# --- 5. FUNCIÓN DE RENDERIZADO POR MÓDULO ---
-def render_bloque(inicio_idx, fin_idx, nombre_modulo):
-    st.markdown(f'<div class="mod-header">{nombre_modulo}</div>', unsafe_allow_html=True)
-    
-    # Encabezados de tabla
-    h = st.columns([0.2, 0.3, 0.6, 0.6, 0.4, 0.5])
-    h[0].caption("ID")
-    h[1].caption("PROD.")
-    h[2].caption("L. INICIO")
-    h[3].caption("L. FINAL")
-    h[4].caption("GL")
-    h[5].caption("SOLES")
+# --- 6. PESTAÑAS (INCLUYENDO VALES) ---
+tab1, tab2, tab3, tab4 = st.tabs(["🛒 VENTAS", "💸 GASTOS", "🎫 VALES", "💰 SALDO"])
 
-    total_modulo = 0.0
-
-    for i in range(inicio_idx, fin_idx):
-        it = st.session_state.form_data[i]
-        cols = st.columns([0.2, 0.3, 0.6, 0.6, 0.4, 0.5])
+with tab1:
+    def render_bloque(inicio_idx, fin_idx, nombre_modulo):
+        st.markdown(f'<div class="mod-header">{nombre_modulo}</div>', unsafe_allow_html=True)
         
-        cols[0].markdown(f'<p class="txt-flat"><b>{it["id"]}</b></p>', unsafe_allow_html=True)
-        cols[1].markdown(f'<p class="txt-flat txt-prod">{it["producto"]}</p>', unsafe_allow_html=True)
-        
-        # Lectura Inicio (Entero puro)
-        cols[2].markdown(f'<p class="txt-flat">{int(it["inicio"])}</p>', unsafe_allow_html=True)
-        
-        with cols[3]:
-            # Lectura Final (Verde, Entero puro)
-            st.markdown('<div class="input-verde">', unsafe_allow_html=True)
-            n_fin = st.number_input(
-                label=f"input_{i}", 
-                value=int(it['final']), 
-                step=1, 
-                key=f"k_{i}", 
-                label_visibility="collapsed"
-            )
-            st.markdown('</div>', unsafe_allow_html=True)
-            st.session_state.form_data[i]['final'] = n_fin
-        
-        galones = n_fin - it["inicio"]
-        subtotal = galones * PRECIOS[it["producto"]]
-        total_modulo += subtotal
-        
-        cols[4].markdown(f'<p class="txt-flat" style="color:blue">{galones:,.2f}</p>', unsafe_allow_html=True)
-        cols[5].markdown(f'<p class="txt-flat txt-soles">S/ {subtotal:,.2f}</p>', unsafe_allow_html=True)
-    
-    st.markdown(f'<div class="mod-footer">SUBTOTAL {nombre_modulo}: S/ {total_modulo:,.2f}</div>', unsafe_allow_html=True)
-    return total_modulo
+        # Cabeceras
+        h = st.columns([0.2, 0.3, 0.6, 0.6, 0.4, 0.5])
+        h[0].caption("ID")
+        h[1].caption("PROD")
+        h[2].caption("L. INICIO")
+        h[3].caption("L. FINAL")
+        h[4].caption("GL")
+        h[5].caption("SOLES")
 
-# --- 6. PESTAÑAS PRINCIPALES ---
-t1, t2, t3 = st.tabs(["🛒 REGISTRO", "💸 GASTOS", "💰 TOTALES"])
+        total_mod_soles = 0.0
 
-with t1:
+        for i in range(inicio_idx, fin_idx):
+            item = st.session_state.form_data[i]
+            cols = st.columns([0.2, 0.3, 0.6, 0.6, 0.4, 0.5])
+            
+            with cols[0]: st.markdown(f'<p class="txt-flat"><b>{item["id"]}</b></p>', unsafe_allow_html=True)
+            with cols[1]: st.markdown(f'<p class="txt-flat txt-prod">{item["producto"]}</p>', unsafe_allow_html=True)
+            # Inicio como entero puro
+            with cols[2]: st.markdown(f'<p class="txt-flat">{int(item["inicio"])}</p>', unsafe_allow_html=True)
+            
+            with cols[3]:
+                st.markdown('<div class="input-verde">', unsafe_allow_html=True)
+                nuevo_final = st.number_input(
+                    label=f"in_{i}", 
+                    value=int(item['final']), 
+                    step=1, 
+                    key=f"k_{i}", 
+                    label_visibility="collapsed"
+                )
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            item['final'] = nuevo_final
+            galones = item["final"] - item["inicio"]
+            subtotal = galones * PRECIOS[item["producto"]]
+            total_mod_soles += subtotal
+            
+            with cols[4]: st.markdown(f'<p class="txt-flat" style="color:blue">{galones:,.2f}</p>', unsafe_allow_html=True)
+            with cols[5]: st.markdown(f'<p class="txt-flat txt-soles">S/ {subtotal:,.2f}</p>', unsafe_allow_html=True)
+
+        st.markdown(f'<div class="mod-footer">SUBTOTAL {nombre_modulo}: S/ {total_mod_soles:,.2f}</div>', unsafe_allow_html=True)
+        return total_mod_soles
+
     m1 = render_bloque(0, 8, "MÓDULO 1")
     m2 = render_bloque(8, 16, "MÓDULO 2")
     m3 = render_bloque(16, 22, "MÓDULO 3")
     
-    total_bruto = m1 + m2 + m3
+    venta_bruta_total = m1 + m2 + m3
 
-with t2:
+with tab2:
     st.markdown("### Registro de Gastos")
-    with st.form("form_gastos", clear_on_submit=True):
-        cg1, cg2 = st.columns([3,1])
-        d = cg1.text_input("Descripción del gasto")
-        m = cg2.number_input("Monto S/", min_value=0.0)
-        if st.form_submit_button("Agregar"):
-            if d: 
-                st.session_state.gastos.append({"D": d, "M": m})
-                st.rerun()
-    if st.session_state.gastos:
-        st.table(st.session_state.gastos)
+    with st.form("f_gastos", clear_on_submit=True):
+        c1, c2 = st.columns([3,1])
+        d = c1.text_input("Gasto / Concepto")
+        m = c2.number_input("Monto S/", min_value=0.0)
+        if st.form_submit_button("Añadir"):
+            if d: st.session_state.gastos.append({"D": d, "M": m}); st.rerun()
+    if st.session_state.gastos: st.table(st.session_state.gastos)
 
-with t3:
+with tab3:
+    st.markdown("### Registro de Vales")
+    with st.form("f_vales", clear_on_submit=True):
+        c1, c2 = st.columns([3,1])
+        cl = c1.text_input("Cliente / Placa")
+        v = c2.number_input("S/", min_value=0.0)
+        if st.form_submit_button("Añadir Vale"):
+            if cl: st.session_state.vales.append({"C": cl, "M": v}); st.rerun()
+    if st.session_state.vales: st.table(st.session_state.vales)
+
+with tab4:
     total_g = sum(g["M"] for g in st.session_state.gastos)
+    total_v = sum(v["M"] for v in st.session_state.vales)
+    neto = venta_bruta_total - total_g - total_v
+    
     st.markdown(f"""
-        <div style="border:2px solid #333; padding:30px; text-align:center; background-color:#fff; margin-top:20px;">
-            <h2 style="margin:0;">RESUMEN DE CIERRE</h2>
+        <div style="border:2px solid #000; padding:25px; text-align:center; background-color:#fff;">
+            <h2 style="margin:0;">CIERRE DE CAJA</h2>
             <hr>
-            <h4 style="margin:5px;">Ventas Brutas: S/ {total_bruto:,.2f}</h4>
+            <h4 style="margin:5px;">Venta Bruta: S/ {venta_bruta_total:,.2f}</h4>
             <h4 style="margin:5px; color:red;">Total Gastos: S/ {total_g:,.2f}</h4>
-            <h1 style="color:green; font-size:3rem; margin:15px 0;">NETO: S/ {total_bruto - total_g:,.2f}</h1>
+            <h4 style="margin:5px; color:orange;">Total Vales: S/ {total_v:,.2f}</h4>
+            <h1 style="color:green; font-size:3rem; margin:15px 0;">NETO: S/ {neto:,.2f}</h1>
         </div>
     """, unsafe_allow_html=True)
